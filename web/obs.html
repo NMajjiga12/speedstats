@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>OBS Run Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+    background: #000; 
+    color: #fff; 
+    font-family: 'Montserrat', sans-serif;
+    padding: 20px;
+}
+.runners-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+.runner-container {
+    background: rgba(0, 0, 0, 0.8);
+    padding: 15px;
+    border-radius: 8px;
+    min-width: 400px;
+}
+.runner-stats {
+    font-size: 18px;
+    line-height: 1.6;
+    text-align: center;  /* Added center alignment */
+}
+.live-time-line {
+    text-align: right;
+    margin-top: 8px;
+}
+</style>
+</head>
+<body>
+    <div id="runnerContainer"></div>
+    
+    <script>
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            return [
+                hours > 0 ? hours.toString() : null,
+                minutes.toString().padStart(2, '0'),
+                seconds.toString().padStart(2, '0')
+            ].filter(Boolean).join(':');
+        }
+
+        function formatDelta(delta) {
+            const sign = delta < 0 ? '−' : '+';
+            const totalSeconds = Math.abs(delta) / 1000;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            const secondsFormatted = seconds.toFixed(2).padStart(5, '0');
+
+            return minutes > 0
+            ? `${sign}${minutes}:${secondsFormatted}`
+            : `${sign}${secondsFormatted}`;
+        }
+
+        function formatFullTime(ms) {
+            const totalMs = ms;
+            const hours = Math.floor(totalMs / 3600000);
+            let remainingMs = totalMs % 3600000;
+            const minutes = Math.floor(remainingMs / 60000);
+            remainingMs %= 60000;
+            const seconds = Math.floor(remainingMs / 1000);
+
+            const parts = [];
+            if (hours > 0) {
+                parts.push(hours.toString());
+                parts.push(minutes.toString().padStart(2, '0'));
+                parts.push(seconds.toString().padStart(2, '0'));
+            } else if (minutes > 0) {
+                parts.push(minutes.toString());
+                parts.push(seconds.toString().padStart(2, '0'));
+            } else {
+                parts.push(seconds.toString());
+            }
+
+            return parts.join(':');
+        }
+
+        function getRunnerFromURL() {
+            const pathSegments = window.location.pathname.split('/');
+            return pathSegments[2]?.toLowerCase();
+        }
+
+        async function updateData() {
+            const targetRunner = getRunnerFromURL();
+            if (!targetRunner) return;
+
+            try {
+                const response = await fetch('/data.json');
+                const runners = await response.json();
+                const runner = runners.find(r => r.login.toLowerCase() === targetRunner);
+                
+                const container = document.getElementById('runnerContainer');
+                if (!runner) {
+                    container.innerHTML = '<div class="runner-container">Runner not found</div>';
+                    return;
+                }
+
+                const splitDisplay = runner.splitIndex === -1 
+                    ? 'N/A' 
+                    : runner.currentSplitName || `Split ${runner.splitIndex + 1}`;
+
+                container.innerHTML = `
+                    <div class="runner-container">
+                        <div class="runner-stats">
+                            <div>Twitch: ${runner.login}</div>
+                            <div>Current Split: ${splitDisplay}</div>
+                            <div>PB Delta: ${formatDelta(runner.delta)}</div>
+                            <div>Best Possible: ${formatFullTime(runner.bestPossible)}</div>
+                            <div>Personal Best: ${formatFullTime(runner.pb)}</div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Update error:', error);
+            }
+            setTimeout(updateData, 1000);
+        }
+
+        document.addEventListener('DOMContentLoaded', updateData);
+    </script>
+</body>
+</html>
